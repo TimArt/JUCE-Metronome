@@ -5,6 +5,7 @@
 #include <juce_core/juce_core.h>
 #include <juce_dsp/juce_dsp.h>
 #include <span>
+#include "TimeSignature.h"
 
 class Metronome
 {
@@ -60,7 +61,14 @@ public:
         }
     }
 
-    // TODO: setTimeSignature() - also handle similarly updating to setBPM where we do not fully resut but we ensure valud state
+    void setTimeSignature(const TimeSignature timeSignatureNew)
+    {
+        if (timeSignature != timeSignatureNew)
+        {
+            timeSignature = timeSignatureNew;
+            countBeatInMeasure = std::min(countBeatInMeasure, timeSignature.beatsPerMeasure - 1);
+        }
+    }
 
     void process (juce::AudioBuffer<float>& buffer) noexcept
     {
@@ -132,26 +140,6 @@ private:
     std::unique_ptr<juce::AudioFormatReaderSource>& getAudioForBeat (const bool isDownbeat) { return isDownbeat ? downbeatAudio : beatAudio; }
 
     double bpm = 120;
-
-    // Unions internally to allow two names for the same variable.
-    // - `timeSig.numerator` is same as `timeSig.beatsPerMeasure`
-    // - `timeSig.denominator` is same as `timeSig.noteTypeForBeat`
-    struct TimeSignature
-    {
-        // Used for tracking downbeats vs regular beats
-        // `union` to allow two names for the same thing
-        union
-        {
-            int numerator, beatsPerMeasure = 4;
-        };
-
-        // Type of note that represents a beat
-        // 1 = whole, 2 = half, 4 = quarter, 8 = eighth, 16 = sixteenth
-        union
-        {
-            int denominator, noteTypeForBeat = 4;
-        };
-    };
 
     TimeSignature timeSignature = { { 4 }, { 4 } };
 

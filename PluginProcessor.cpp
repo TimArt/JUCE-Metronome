@@ -3,14 +3,14 @@
 
 //==============================================================================
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
+    : AudioProcessor (BusesProperties()
+#if ! JucePlugin_IsMidiEffect
+#if ! JucePlugin_IsSynth
+                          .withInput ("Input", juce::AudioChannelSet::stereo(), true)
+#endif
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+      )
 {
 }
 
@@ -26,29 +26,29 @@ const juce::String AudioPluginAudioProcessor::getName() const
 
 bool AudioPluginAudioProcessor::acceptsMidi() const
 {
-   #if JucePlugin_WantsMidiInput
+#if JucePlugin_WantsMidiInput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool AudioPluginAudioProcessor::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+#if JucePlugin_ProducesMidiOutput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool AudioPluginAudioProcessor::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double AudioPluginAudioProcessor::getTailLengthSeconds() const
@@ -58,8 +58,8 @@ double AudioPluginAudioProcessor::getTailLengthSeconds() const
 
 int AudioPluginAudioProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1; // NB: some hosts don't cope very well if you tell them there are 0 programs,
+        // so this should be at least 1, even if you're not really implementing programs.
 }
 
 int AudioPluginAudioProcessor::getCurrentProgram()
@@ -101,26 +101,26 @@ void AudioPluginAudioProcessor::releaseResources()
 
 bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
-  #else
+#else
     // This is the place where you check if the layout is supported.
     // In this template code we only support mono or stereo.
     // Some plugin hosts, such as certain GarageBand versions, will only
     // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
     // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
+#if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
+#endif
 
     return true;
-  #endif
+#endif
 }
 
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
@@ -129,7 +129,7 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ignoreUnused (midiMessages);
 
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
+    auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
     // In case we have more outputs than inputs, this code clears any output
@@ -144,10 +144,8 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (isPlaying)
     {
         metronome.setBPM (bpm.load());
-
-        metronome.process(buffer);
-        //auto outBlock = juce::dsp::AudioBlock<float> { buffer }.getSubsetChannelBlock (0, static_cast<size_t> (getTotalNumOutputChannels()));
-        //metronome.process (juce::dsp::ProcessContextReplacing<float> (outBlock));
+        metronome.setTimeSignature ({ { timeSigNumerator }, { timeSigDenominator } });
+        metronome.process (buffer);
     }
 
     // This is the place where you'd normally do the guts of your plugin's
@@ -199,7 +197,6 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
     return new AudioPluginAudioProcessor();
 }
 
-
 void AudioPluginAudioProcessor::togglePlayback()
 {
     // TODO: We really want all this to happen on audio thread.
@@ -208,7 +205,7 @@ void AudioPluginAudioProcessor::togglePlayback()
     //
     // Or we can lock the audio thread temporarily with spin lock?
 
-    isPlaying = !isPlaying;
-    if (!isPlaying)
+    isPlaying = ! isPlaying;
+    if (! isPlaying)
         metronome.reset();
 }

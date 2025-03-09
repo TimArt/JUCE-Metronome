@@ -48,6 +48,11 @@ public:
     std::atomic<bool> isPlaying = false;
     std::atomic<double> bpm = 120.0;
 
+    // Instead of using std::atomic<TimeSignature> we split the internals of this struct because
+    // std::atomic<structs> are not guarunteed to be lock free.
+    std::atomic<int> timeSigNumerator = 4;
+    std::atomic<int> timeSigDenominator = 4;
+
 private:
     Metronome metronome;
 
