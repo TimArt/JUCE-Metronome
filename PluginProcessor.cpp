@@ -90,7 +90,7 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     if (channels == 0)
         return;
 
-    metronome.prepare ({ sampleRate, (uint32_t) samplesPerBlock, (uint32_t) channels });
+    metronome.prepareToPlay (sampleRate, samplesPerBlock);
 }
 
 void AudioPluginAudioProcessor::releaseResources()
