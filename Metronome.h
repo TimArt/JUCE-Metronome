@@ -68,13 +68,13 @@ public:
         beats.clear();
         beats.push_back ({ 0, true });
 
-        downbeatAudio->setNextReadPosition (0);
-        beatAudio->setNextReadPosition (0);
+        // Set audio clips to be "stopped" until its read position is set to 0 the first time.
+        downbeatAudio->setNextReadPosition (downbeatAudio->getTotalLength() - 1);
+        beatAudio->setNextReadPosition (beatAudio->getTotalLength() - 1);
     }
 
     void process (juce::AudioBuffer<float>& buffer) noexcept
     {
-        // const int numChannels = buffer.getNumChannels();
         const int numSamples = buffer.getNumSamples();
 
         // Determine remaining beat positions for this block
@@ -93,10 +93,7 @@ public:
             sampleCountInCurrentBeat += numSamples;
 
             const juce::AudioSourceChannelInfo info (&buffer, 0, numSamples);
-            info.clearActiveBufferRegion(); // clear before filling via sample->getNextAudioBlock(info), do I really need to do this?
             mixer.getNextAudioBlock (info);
-            //beatAudio->getNextAudioBlock (info); // voice 1
-            //downbeatAudio->getNextAudioBlock (info); // voice 2
         }
         else // If beat positions in this block, restart audio sample and start outputting it at the expected position
         {
@@ -106,30 +103,14 @@ public:
             for (const auto& [samplePosition, isDownbeat] : beats)
             {
                 const auto & audio = getAudio(isDownbeat);
-                audio->setNextReadPosition (0);
+                audio->setNextReadPosition (0); // begin playback of specific audio clip
 
                 const juce::AudioSourceChannelInfo info (&buffer, samplePosition, numSamples - samplePosition); // allocation?? looks like lightweight struct
-                info.clearActiveBufferRegion(); // clear before filling via sample->getNextAudioBlock(info), do I really need to do this?
-                //audio->getNextAudioBlock (info);
                 mixer.getNextAudioBlock (info);
-
-                // TODO: Handle overlap of audio or double trigger of audio here . . .
-                // Something is def wrong right now where I can hear the regular beat audio cut out sometimes.
-                // It always happens around the same time in a loop regardless of the BPM.
-
-                // TODO: Fix bug where both audio are played on the first downbeat!!
             }
         }
 
-        // Problem with this is that BOTH audio samples will play on first downbeat
-        // const juce::AudioSourceChannelInfo info (&buffer, 0, numSamples);
-        // //info.clearActiveBufferRegion(); // clear before filling via sample->getNextAudioBlock(info), do I really need to do this?
-        // beatAudio->getNextAudioBlock (info); // voice 1
-        // downbeatAudio->getNextAudioBlock (info); // voice 2
-
         beats.clear();
-
-        // TODO: Downbeat audio and beat audio should be ADDED together.
     }
 
 private:
