@@ -11,6 +11,106 @@ class Metronome
 public:
     Metronome()
     {
+        loadAudioSamples();
+
+        // Be able to handle enough beat positions per buffer without reallocation in audio callback.
+        static constexpr int MAX_BEATS_IN_AUDIO_BUFFER_PREDICTION = 2048;
+        beats.reserve (MAX_BEATS_IN_AUDIO_BUFFER_PREDICTION);
+    }
+
+    void prepareToPlay (const double sampleRateIn, const int samplesPerBlock)
+    {
+        sampleRate = sampleRateIn;
+
+        mixer.removeAllInputs();
+
+        downbeatAudio->prepareToPlay (samplesPerBlock, sampleRate);
+        beatAudio->prepareToPlay (samplesPerBlock, sampleRate);
+        mixer.prepareToPlay (samplesPerBlock, sampleRate);
+        mixer.addInputSource (downbeatAudio.get(), false);
+        mixer.addInputSource (beatAudio.get(), false);
+
+        reset();
+    }
+
+    void reset()
+    {
+        countSampleInCurrentBeat = 0;
+
+        // Prepare first downbeat
+        countBeatInMeasure = 0;
+        beats.clear();
+        beats.push_back ({ 0, true });
+
+        // Set audio clips to be "stopped" until its read position is set to 0 the first time.
+        downbeatAudio->setNextReadPosition (downbeatAudio->getTotalLength() - 1);
+        beatAudio->setNextReadPosition (beatAudio->getTotalLength() - 1);
+    }
+
+    void setBPM (const double bpmNew)
+    {
+        if (! juce::exactlyEqual (bpm, bpmNew))
+        {
+            bpm = bpmNew;
+
+            /// When user changes BPM, keep counting, but never surpass the current beat length, which could cause BAD_ACCESS in `process()`.
+            ///     Alternatively, we could set `countSampleInCurrentBeat = 0`, but this causes the beat to
+            ///     hit every time a new BPM change is detected, so when user drags slider, it sounds horrible.
+            countSampleInCurrentBeat = std::min (countSampleInCurrentBeat, getSamplesPerBeat());
+        }
+    }
+
+    // TODO: setTimeSignature() - also handle similarly updating to setBPM where we do not fully resut but we ensure valud state
+
+    void process (juce::AudioBuffer<float>& buffer) noexcept
+    {
+        const int numSamplesInBuffer = buffer.getNumSamples();
+
+        // Find beat positions in current block
+        const int samplesPerBeat = getSamplesPerBeat();
+        for (int offset = std::max(samplesPerBeat - countSampleInCurrentBeat, 0); offset < numSamplesInBuffer; offset += samplesPerBeat)
+        {
+            ++countBeatInMeasure %= timeSignature.beatsPerMeasure; // consider using if statement instead of modulo for speed
+            beats.push_back ({ offset, countBeatInMeasure == 0 });
+        }
+
+        // If no beat positions in this block, keep counting and output any audio that may be remaining in the beat samples
+        if (beats.empty())
+        {
+            /// Alternatively, we could increase `countSampleInCurrentBeat` like:
+            /// ```cpp
+            /// countSampleInCurrentBeat = (numSamplesInBuffer + countSampleInCurrentBeat) % samplesPerBeat;
+            /// ```
+            // But `%` modulo relies on division which is more computationally heavy.
+            // We can obtain the same result heuristically with this if statement, without division.
+            countSampleInCurrentBeat += numSamplesInBuffer;
+
+            const juce::AudioSourceChannelInfo info (&buffer, 0, numSamplesInBuffer);
+            mixer.getNextAudioBlock (info);
+        }
+        else // If beat positions in this block, restart audio sample and start outputting it at the expected position
+        {
+            countSampleInCurrentBeat = numSamplesInBuffer - beats.back().samplePosition;
+
+            // Output click audio starting at each beat
+            for (size_t beatIndex = 0; beatIndex < beats.size(); ++beatIndex)
+            {
+                const auto& [beatPosition, isDownbeat] = beats[beatIndex];
+                const int nextBeatPosition = beatIndex + 1 < beats.size() ? beats[beatIndex + 1].samplePosition : numSamplesInBuffer;
+
+                getAudioForBeat (isDownbeat)->setNextReadPosition (0); // restart playback position of specific audio clip
+
+                const juce::AudioSourceChannelInfo info (&buffer, beatPosition, nextBeatPosition - beatPosition);
+                mixer.getNextAudioBlock (info);
+            }
+        }
+
+        beats.clear();
+    }
+
+private:
+    void loadAudioSamples()
+    {
         juce::AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
 
@@ -26,110 +126,38 @@ public:
 
         downbeatAudio = makeReaderSource ("/Users/timarterbury/Documents/Dev Projects/JUCE Metronome/Resources/click-downbeat.wav");
         beatAudio = makeReaderSource ("/Users/timarterbury/Documents/Dev Projects/JUCE Metronome/Resources/click-beat.wav");
-
-        // Be able to handle enough beat positions per buffer without reallocation
-        static constexpr int MAX_BEATS_IN_AUDIO_BUFFER_PREDICTION = 2048;
-        beats.reserve (MAX_BEATS_IN_AUDIO_BUFFER_PREDICTION);
     }
 
-    void prepareToPlay (double sampleRateIn, int samplesPerBlock)
-    {
-        sampleRate = sampleRateIn;
-
-        mixer.removeAllInputs();
-
-        downbeatAudio->prepareToPlay (samplesPerBlock, sampleRate);
-        beatAudio->prepareToPlay (samplesPerBlock, sampleRate);
-        mixer.prepareToPlay (samplesPerBlock, sampleRate);
-        mixer.addInputSource (downbeatAudio.get(), false);
-        mixer.addInputSource (beatAudio.get(), false);
-
-        reset();
-    }
-
-    void setBPM (double bpmNew)
-    {
-        if (! juce::exactlyEqual (bpm, bpmNew))
-        {
-            bpm = bpmNew;
-            sampleCountInCurrentBeat = std::min (sampleCountInCurrentBeat, getSamplesPerBeat()); // ensure valid indexing
-            // TODO: Ensure this is correct instead of getSamplesPerBeat() - 1
-        }
-    }
-
-    // TODO: setTimeSignature() - also handle similarly updating to setBPM where we do not fully resut but we ensure valud state
-
-    void reset()
-    {
-        sampleCountInCurrentBeat = 0;
-
-        // Prepare first downbeat
-        countBeatInMeasure = 0;
-        beats.clear();
-        beats.push_back ({ 0, true });
-
-        // Set audio clips to be "stopped" until its read position is set to 0 the first time.
-        downbeatAudio->setNextReadPosition (downbeatAudio->getTotalLength() - 1);
-        beatAudio->setNextReadPosition (beatAudio->getTotalLength() - 1);
-    }
-
-    void process (juce::AudioBuffer<float>& buffer) noexcept
-    {
-        const int numSamples = buffer.getNumSamples();
-
-        // Determine remaining beat positions for this block
-        const int samplesPerBeat = getSamplesPerBeat();
-        int offset = samplesPerBeat - sampleCountInCurrentBeat;
-        while (offset < numSamples)
-        {
-            ++countBeatInMeasure %= timeSignature.numerator;
-            beats.push_back ({ offset, countBeatInMeasure == 0 });
-            offset += samplesPerBeat;
-        }
-
-        // If no beat positions in this block, keep counting and output any audio that may be remaining in the beat samples
-        if (beats.empty())
-        {
-            sampleCountInCurrentBeat += numSamples;
-
-            const juce::AudioSourceChannelInfo info (&buffer, 0, numSamples);
-            mixer.getNextAudioBlock (info);
-        }
-        else // If beat positions in this block, restart audio sample and start outputting it at the expected position
-        {
-            sampleCountInCurrentBeat = numSamples - beats.back().samplePosition;
-
-            // Output click audio at each beat
-            for (const auto& [samplePosition, isDownbeat] : beats)
-            {
-                const auto & audio = getAudio(isDownbeat);
-                audio->setNextReadPosition (0); // begin playback of specific audio clip
-
-                const juce::AudioSourceChannelInfo info (&buffer, samplePosition, numSamples - samplePosition); // allocation?? looks like lightweight struct
-                mixer.getNextAudioBlock (info);
-            }
-        }
-
-        beats.clear();
-    }
-
-private:
     [[nodiscard]] int getSamplesPerBeat() const { return juce::roundToInt (60.0 / bpm * (4.0 / timeSignature.denominator) * sampleRate); }
-    std::unique_ptr<juce::AudioFormatReaderSource>& getAudio (const bool isDownbeat) { return isDownbeat ? downbeatAudio : beatAudio; }
+    std::unique_ptr<juce::AudioFormatReaderSource>& getAudioForBeat (const bool isDownbeat) { return isDownbeat ? downbeatAudio : beatAudio; }
 
     double bpm = 120;
 
+    // Unions internally to allow two names for the same variable.
+    // - `timeSig.numerator` is same as `timeSig.beatsPerMeasure`
+    // - `timeSig.denominator` is same as `timeSig.noteTypeForBeat`
     struct TimeSignature
     {
-        int numerator = 4; // beats per measure (downbeat tracking)
-        int denominator = 4; // note which receives beat (4 = quarter, 8 = eighth, 16 = sixteenth)
+        // Used for tracking downbeats vs regular beats
+        // `union` to allow two names for the same thing
+        union
+        {
+            int numerator, beatsPerMeasure = 4;
+        };
+
+        // Type of note that represents a beat
+        // 1 = whole, 2 = half, 4 = quarter, 8 = eighth, 16 = sixteenth
+        union
+        {
+            int denominator, noteTypeForBeat = 4;
+        };
     };
 
-    TimeSignature timeSignature = { 4, 4 };
+    TimeSignature timeSignature = { { 4 }, { 4 } };
 
     double sampleRate = 0;
-    int sampleCountInCurrentBeat = 0;
-    int countBeatInMeasure = 0;
+    int countSampleInCurrentBeat = 0; // starts counting at 1, so 1 means 1 sample
+    int countBeatInMeasure = 0; // starts counting at 0, so 0 is the downbeat
 
     juce::MixerAudioSource mixer;
     std::unique_ptr<juce::AudioFormatReaderSource> downbeatAudio;
