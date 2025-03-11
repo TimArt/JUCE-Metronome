@@ -141,6 +141,14 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
+    // Instead of using our own playback and BPM & time signature state, we could sync to DAW using:
+    // auto position = getPlayHead()->getPosition();
+    // position->getTimeInSamples();
+    // position->getTimeSignature();
+    // position->getPpqPositionOfLastBarStart(); // PPQ (parts per quarter) is bad name, this is number of quarter notes from start to last bar
+    // position->getPpqPosition(); // PPQ (parts per quarter) is bad name, this is number of quarter notes from start
+    // position->getBarCount();
+
     if (isPlaying)
     {
         metronome.setBPM (bpm.load());
@@ -199,11 +207,14 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
 void AudioPluginAudioProcessor::togglePlayback()
 {
-    // TODO: We really want all this to happen on audio thread.
-    // we don't want to modify the metronome data while it is being used on the audio thread!
-    // Ideally, probably lock free queue of messages, but this is fine for now.
+    // TODO: We really want this whole operation to be atomic, but right now it is not.
+    // Metronome could be playing on the audio thread while its data is being reset if it was
+    // still in the middle of an audio callback that had isPlaying == true.
+    // Ideally, we would use a lock free queue of messages.
     //
-    // Or we can lock the audio thread temporarily with spin lock?
+    // Or we could use a try lock so the audio thread could acquire or pass a lock quick
+    // like JUCE example `WebViewPluginDemo.h`
+    // const SpinLock::ScopedTryLockType lock (spectrumDataLock);
 
     isPlaying = ! isPlaying;
     if (! isPlaying)
