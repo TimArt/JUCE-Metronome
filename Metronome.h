@@ -1,11 +1,11 @@
 
 #pragma once
 
+#include "TimeSignature.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_core/juce_core.h>
 #include <juce_dsp/juce_dsp.h>
 #include <span>
-#include "TimeSignature.h"
 
 class Metronome
 {
@@ -61,12 +61,12 @@ public:
         }
     }
 
-    void setTimeSignature(const TimeSignature timeSignatureNew)
+    void setTimeSignature (const TimeSignature timeSignatureNew)
     {
         if (timeSignature != timeSignatureNew)
         {
             timeSignature = timeSignatureNew;
-            countBeatInMeasure = std::min(countBeatInMeasure, timeSignature.beatsPerMeasure - 1);
+            countBeatInMeasure = std::min (countBeatInMeasure, timeSignature.beatsPerMeasure - 1);
         }
     }
 
@@ -76,7 +76,7 @@ public:
 
         // Find beat positions in current block
         const int samplesPerBeat = getSamplesPerBeat();
-        for (int offset = std::max(samplesPerBeat - countSampleInCurrentBeat, 0); offset < numSamplesInBuffer; offset += samplesPerBeat)
+        for (int offset = std::max (samplesPerBeat - countSampleInCurrentBeat, 0); offset < numSamplesInBuffer; offset += samplesPerBeat)
         {
             ++countBeatInMeasure %= timeSignature.beatsPerMeasure; // consider using if statement instead of modulo for speed
             beats.push_back ({ offset, countBeatInMeasure == 0 });

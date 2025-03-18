@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Metronome.h"
 #include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
-#include "Metronome.h"
 
 //==============================================================================
 class AudioPluginAudioProcessor final : public juce::AudioProcessor

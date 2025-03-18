@@ -14,9 +14,7 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 {
 }
 
-AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
-{
-}
+AudioPluginAudioProcessor::~AudioPluginAudioProcessor() = default;
 
 //==============================================================================
 const juce::String AudioPluginAudioProcessor::getName() const
@@ -141,12 +139,19 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // Instead of using our own playback and BPM & time signature state, we could sync to DAW using:
+    // Instead of using our own playback, BPM, and time signature state, we could sync to DAW using:
     // auto position = getPlayHead()->getPosition();
     // position->getTimeInSamples();
     // position->getTimeSignature();
-    // position->getPpqPositionOfLastBarStart(); // PPQ (parts per quarter) is bad name, this is number of quarter notes from start to last bar
-    // position->getPpqPosition(); // PPQ (parts per quarter) is bad name, this is number of quarter notes from start
+    //
+    // PPQ means "parts/pulses per quarter note" and is used in the context of MIDI to represent
+    // the quantization resolution of a MIDI sequencer or MIDI file. JUCE uses "PPQ" in the following
+    // 2 function names, but this is a misnomer, really they mean "the number of quarter notes since".
+    // These functions return the number of quarter notes as a continuous number. So 2.5 means
+    // two and a half quarter notes.
+    // position->getPpqPositionOfLastBarStart();
+    // position->getPpqPosition();
+    //
     // position->getBarCount();
 
     if (isPlaying)
