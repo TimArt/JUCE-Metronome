@@ -1,29 +1,31 @@
-# Example Audio Plugin CMakeLists.txt
-
-# To get started on a new plugin, copy this entire folder (containing this file and C++ sources) to
-# a convenient location, and then start making modifications.
-
-# The first line of any CMake project should be a call to `cmake_minimum_required`, which checks
-# that the installed CMake will be able to understand the following CMakeLists, and ensures that
-# CMake's behaviour is compatible with the named version. This is a standard CMake command, so more
-# information can be found in the CMake docs.
-
+# This file is modified from https://github.com/juce-framework/JUCE/blob/master/examples/CMake/GuiApp/CMakeLists.txt
+# For other examples of CMakeLists for JUCE GUI apps, check `extras/Projucer` and `examples/DemoRunner` in the JUCE repo.
 cmake_minimum_required(VERSION 3.22)
 
-# The top-level CMakeLists.txt file for a project must contain a literal, direct call to the
-# `project()` command. `project()` sets up some helpful variables that describe source/binary
-# directories, and the current project version. This is a standard CMake command.
+set(PROJECT_NAME "Metronome")
 
-project(Metronome VERSION 0.0.1)
+# If compiling MSVC we want static runtime linkage
+if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif ()
 
-# If you've installed JUCE somehow (via a package manager, or directly using the CMake install
-# target), you'll need to tell this project that it depends on the installed copy of JUCE. If you've
-# included JUCE directly in your source tree (perhaps as a submodule), you'll need to tell CMake to
-# include that subdirectory as part of the build.
+project("${PROJECT_NAME}" VERSION 0.0.1)
 
-# find_package(JUCE CONFIG REQUIRED)        # If you've installed JUCE to your system
-# or
-add_subdirectory(JUCE)                    # If you've put JUCE in a subdirectory called JUCE
+include(FetchContent)
+set(FETCHCONTENT_QUIET FALSE)
+
+# Fetch JUCE (our custom JUCE repo)
+FetchContent_Declare(
+        juce
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG 8.0.6
+        GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(juce)
+
+# Make JUCE module source files appear in IDE
+set_property(GLOBAL PROPERTY USE_FOLDERS YES)
+option(JUCE_ENABLE_MODULE_SOURCE_GROUPS "Enable Module Source Groups" ON)
 
 # If you are building a VST2 or AAX plugin, CMake needs to be told where to find these SDKs on your
 # system. This setup should be done before calling `juce_add_plugin`.
@@ -37,7 +39,7 @@ add_subdirectory(JUCE)                    # If you've put JUCE in a subdirectory
 # the formats specified by the FORMATS arguments. This function accepts many optional arguments.
 # Check the readme at `docs/CMake API.md` in the JUCE repo for the full list.
 
-juce_add_plugin(Metronome
+juce_add_plugin("${PROJECT_NAME}"
     # VERSION ...                               # Set this if the plugin version is different to the project version
     # ICON_BIG ...                              # ICON_* arguments specify a path to an image file to use as an icon for the Standalone
     # ICON_SMALL ...
@@ -52,7 +54,7 @@ juce_add_plugin(Metronome
     PLUGIN_CODE Dem0                            # A unique four-character plugin id with exactly one upper-case character
                                                 # GarageBand 10.3 requires the first letter to be upper-case, and the remaining letters to be lower-case
     FORMATS AU VST3 Standalone                  # The formats to build. Other valid formats are: AAX Unity VST AU AUv3
-    PRODUCT_NAME "Metronome")        # The name of the final executable, which can differ from the target name
+    PRODUCT_NAME "${PROJECT_NAME}")        # The name of the final executable, which can differ from the target name
 
 # `juce_generate_juce_header` will create a JuceHeader.h for a given target, which will be generated
 # into your build tree. This should be included with `#include <JuceHeader.h>`. The include path for
@@ -63,17 +65,17 @@ juce_add_plugin(Metronome
 # juce_generate_juce_header(Metronome)
 
 # C++ 20 support
-target_compile_features(Metronome PRIVATE cxx_std_20)
+target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
 # `target_sources` adds source files to a target. We pass the target that needs the sources as the
 # first argument, then a visibility parameter for the sources which should normally be PRIVATE.
 # Finally, we supply a list of source files that will be built into the target. This is a standard
 # CMake command.
+set(SOURCE_DIR "Source")
+file(GLOB_RECURSE CPP_FILES LIST_DIRECTORIES false "${SOURCE_DIR}/*.cpp")
 
-target_sources(Metronome
-    PRIVATE
-        PluginEditor.cpp
-        PluginProcessor.cpp)
+target_sources("${PROJECT_NAME}" PRIVATE ${CPP_FILES})
+target_include_directories("${PROJECT_NAME}" PRIVATE "${SOURCE_DIR}")
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer
 # project, these might be passed in the 'Preprocessor Definitions' field. JUCE modules also make use
@@ -82,7 +84,7 @@ target_sources(Metronome
 # definitions will be visible both to your code, and also the JUCE module code, so for new
 # definitions, pick unique names that are unlikely to collide! This is a standard CMake command.
 
-target_compile_definitions(Metronome
+target_compile_definitions("${PROJECT_NAME}"
     PUBLIC
         # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
         JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
@@ -96,7 +98,11 @@ target_compile_definitions(Metronome
 # static library. These source files can be of any kind (wav data, images, fonts, icons etc.).
 # Conversion to binary-data will happen when your target is built.
 
-# juce_add_binary_data(AudioPluginData SOURCES ...)
+# Gather binary data files
+file(GLOB_RECURSE BINARY_DATA_FILES LIST_DIRECTORIES false "Resources/BinaryData/*.*")
+file(GLOB_RECURSE FILES_TO_REMOVE LIST_DIRECTORIES false "Resources/BinaryData/*.DS_Store") # Remove .DS_Store files on Mac
+list(REMOVE_ITEM BINARY_DATA_FILES ${FILES_TO_REMOVE})
+juce_add_binary_data("${PROJECT_NAME}-BinaryData" SOURCES ${BINARY_DATA_FILES})
 
 # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
 # we're linking our executable target to the `juce::juce_audio_utils` module. Inter-module
@@ -104,9 +110,11 @@ target_compile_definitions(Metronome
 # linked automatically. If we'd generated a binary data target above, we would need to link to it
 # here too. This is a standard CMake command.
 
-target_link_libraries(Metronome
+target_link_libraries("${PROJECT_NAME}"
     PRIVATE
-        # AudioPluginData           # If we'd created a binary data target, we'd link to it here
+        "${PROJECT_NAME}-BinaryData"
+        juce::juce_audio_devices
+        juce::juce_audio_processors
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags

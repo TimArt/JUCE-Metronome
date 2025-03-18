@@ -2,6 +2,7 @@
 #pragma once
 
 #include "TimeSignature.h"
+#include "BinaryData.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_core/juce_core.h>
 #include <juce_dsp/juce_dsp.h>
@@ -122,18 +123,16 @@ private:
         juce::AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
 
-        auto makeReaderSource = [&formatManager] (const juce::String& filename)
+        auto makeReaderSource = [&formatManager] (const char* bytes, const int size)
         {
-            auto* reader = formatManager.createReaderFor (juce::File (filename));
-            if (reader == nullptr)
-            {
-                jassertfalse;
-            }
+            auto* reader = formatManager.createReaderFor (std::make_unique<juce::MemoryInputStream> (bytes, static_cast<size_t> (size), false));
+            // TODO: Handle audio file not found instead of crashing.
+            jassert(reader != nullptr);
             return std::make_unique<juce::AudioFormatReaderSource> (reader, true);
         };
 
-        downbeatAudio = makeReaderSource ("/Users/timarterbury/Documents/Dev Projects/JUCE Metronome/Resources/click-downbeat.wav");
-        beatAudio = makeReaderSource ("/Users/timarterbury/Documents/Dev Projects/JUCE Metronome/Resources/click-beat.wav");
+        downbeatAudio = makeReaderSource (BinaryData::clickdownbeat_wav, BinaryData::clickdownbeat_wavSize);
+        beatAudio = makeReaderSource (BinaryData::clickbeat_wav, BinaryData::clickbeat_wavSize);
     }
 
     [[nodiscard]] int getSamplesPerBeat() const { return juce::roundToInt (60.0 / bpm * (4.0 / timeSignature.denominator) * sampleRate); }
